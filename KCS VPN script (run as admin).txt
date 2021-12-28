@@ -1,0 +1,40 @@
+﻿param(
+    [Parameter(Mandatory=$false)]
+    [switch]$shouldAssumeToBeElevated,
+
+    [Parameter(Mandatory=$false)]
+    [String]$workingDirOverride
+)
+
+if(-not($PSBoundParameters.ContainsKey('workingDirOverride')))
+{
+    $workingDirOverride = (Get-Location).Path
+}
+
+function Test-Admin {
+    $currentUser = New-Object Security.Principal.WindowsPrincipal $([Security.Principal.WindowsIdentity]::GetCurrent())
+    $currentUser.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+}
+
+if ((Test-Admin) -eq $false)  {
+    if ($shouldAssumeToBeElevated) {
+        Write-Output "Elevating did not work :("
+
+    } else {
+        Start-Process powershell.exe -Verb RunAs -ArgumentList ('-noprofile -file "{0}" -shouldAssumeToBeElevated -workingDirOverride "{1}"' -f ($myinvocation.MyCommand.Definition, "$workingDirOverride"))
+    }
+    exit
+}
+
+Set-Location "$workingDirOverride"
+
+Add-VpnConnection -Name "Kitchen Network Albany” -ServerAddress xxx.xxxxxxxxxxxxxxx.xx.xx -AllUserConnection -TunnelType L2tp -EncryptionLevel required -AuthenticationMethod MsChapv2 -SplitTunneling -RememberCredential -L2tpPsk xxxxxxxxxxxxxxxx -Force
+Add-VpnConnectionRoute -ConnectionName "Kitchen Network Albany" -DestinationPrefix 192.168.61.0/24
+$data = get-content "$env:windir\system32\drivers\etc\hosts"
+$data += "192.168.61.42" + " " + "server.albany"
+$data | Out-File "$env:windir\system32\drivers\etc\hosts" -Force
+Add-VpnConnection -Name "Kitchen Network Henderson” -ServerAddress xxx.xxx.xxx.xxx -AllUserConnection -TunnelType L2tp -EncryptionLevel required -AuthenticationMethod MsChapv2 -SplitTunneling -RememberCredential -L2tpPsk xxxxxxxxxxxxxxxx -Force
+Add-VpnConnectionRoute -ConnectionName "Kitchen Network Henderson" -DestinationPrefix 192.168.45.0/24
+$data = get-content "$env:windir\system32\drivers\etc\hosts"
+$data += "192.168.45.206" + " " + "server.henderson"
+$data | Out-File "$env:windir\system32\drivers\etc\hosts" -Force
